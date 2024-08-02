@@ -1,6 +1,7 @@
 package com.github.kusl.z959
 
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,7 +22,7 @@ class MainActivity : ComponentActivity() {
             ForZTEZ959Theme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
-                        name = "ZTE",
+                        name = Build.MANUFACTURER,  // Get the manufacturer name dynamically
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
