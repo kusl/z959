@@ -93,7 +93,7 @@ jobs:
           echo "tag_name=${TAG_NAME}" >> $GITHUB_ENV
           git tag $TAG_NAME
           git push origin $TAG_NAME
-      - name: Create Release
+      - name: Create Release Tag
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
@@ -103,10 +103,10 @@ jobs:
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Upload Linux Release Asset
+      - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          files: .${{ env.main_project_module }}/build/outputs/apk/release/
+          files: ${{ env.main_project_module }}/build/outputs/apk/release/app-release-unsigned.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
