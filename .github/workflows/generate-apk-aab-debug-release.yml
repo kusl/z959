@@ -107,6 +107,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_NAME }}
-          files: ${{ env.main_project_module }}/build/outputs/apk/release/
+          files: .${{ env.main_project_module }}/build/outputs/apk/release/
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
