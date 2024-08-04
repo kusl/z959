@@ -1,161 +1,166 @@
 # For the ZTE Z959
-
 which runs Android 5.1.1 on API level 22 
-
 I want to write a simple app for android api 22 lollipop that takes content from camera and serves it over rtsp to local network
 
-```kotlin
-plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.jetbrains.kotlin.android)
-}
+To create an app that captures content from the camera and serves it over RTSP on a local network for Android API 22 (Lollipop), you'll need to integrate camera functionality and an RTSP server. Here's a basic outline to get you started:
 
-android {
-    namespace = "com.github.kusl.z959"
-    compileSdk = 34
+1. **Add Camera Permissions**: Update your `AndroidManifest.xml` to include camera permissions.
+2. **Capture Camera Content**: Use the Camera2 API to capture video.
+3. **Serve Video over RTSP**: Use an RTSP library to stream the captured video.
 
-    defaultConfig {
-        applicationId = "com.github.kusl.z959"
-        minSdk = 22
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+### Step 1: Add Camera Permissions
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-    }
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-    buildFeatures {
-        compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
-    }
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-}
-
-dependencies {
-
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
-}
-```
+Update your `AndroidManifest.xml`:
 
 ```xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <application
-        android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.ForZTEZ959"
-        tools:targetApi="31">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.ForZTEZ959">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-
-</manifest>
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-feature android:name="android.hardware.camera" />
+<uses-feature android:name="android.hardware.camera.autofocus" />
 ```
 
+### Step 2: Capture Camera Content
+
+Create a `CameraCapture` class to handle camera operations:
 
 ```kotlin
-package com.github.kusl.z959
+import android.content.Context
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.*
+import android.os.Handler
+import android.os.HandlerThread
+import android.view.Surface
+import android.view.TextureView
 
-import android.os.Bundle
-import android.os.Build
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.github.kusl.z959.ui.theme.ForZTEZ959Theme
+class CameraCapture(private val context: Context, private val textureView: TextureView) {
+    private lateinit var cameraDevice: CameraDevice
+    private lateinit var captureSession: CameraCaptureSession
+    private lateinit var captureRequestBuilder: CaptureRequest.Builder
+    private val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    private val backgroundHandler: Handler
+    private val backgroundThread: HandlerThread
 
+    init {
+        backgroundThread = HandlerThread("CameraBackground").also { it.start() }
+        backgroundHandler = Handler(backgroundThread.looper)
+    }
+
+    fun startCamera() {
+        val cameraId = cameraManager.cameraIdList[0]
+        cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
+            override fun onOpened(camera: CameraDevice) {
+                cameraDevice = camera
+                createCameraPreviewSession()
+            }
+
+            override fun onDisconnected(camera: CameraDevice) {
+                camera.close()
+            }
+
+            override fun onError(camera: CameraDevice, error: Int) {
+                camera.close()
+            }
+        }, backgroundHandler)
+    }
+
+    private fun createCameraPreviewSession() {
+        val texture = textureView.surfaceTexture
+        texture.setDefaultBufferSize(textureView.width, textureView.height)
+        val surface = Surface(texture)
+        captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        captureRequestBuilder.addTarget(surface)
+
+        cameraDevice.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+            override fun onConfigured(session: CameraCaptureSession) {
+                captureSession = session
+                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
+                captureSession.setRepeatingRequest(captureRequestBuilder.build(), null, backgroundHandler)
+            }
+
+            override fun onConfigureFailed(session: CameraCaptureSession) {
+                // Handle failure
+            }
+        }, backgroundHandler)
+    }
+
+    fun stopCamera() {
+        captureSession.close()
+        cameraDevice.close()
+        backgroundThread.quitSafely()
+    }
+}
+```
+
+### Step 3: Serve Video over RTSP
+
+Integrate an RTSP library like `libstreaming` to serve the video. Add the library to your `build.gradle`:
+
+```groovy
+dependencies {
+    implementation 'net.majorkernelpanic:streaming:4.0.3'
+}
+```
+
+Create an `RTSPServer` class to handle streaming:
+
+```kotlin
+import net.majorkernelpanic.streaming.SessionBuilder
+import net.majorkernelpanic.streaming.rtsp.RtspServer
+
+class RTSPServer : RtspServer() {
+    override fun onCreate() {
+        super.onCreate()
+        val session = SessionBuilder.getInstance()
+            .setContext(applicationContext)
+            .setAudioEncoder(SessionBuilder.AUDIO_NONE)
+            .setVideoEncoder(SessionBuilder.VIDEO_H264)
+            .build()
+        setSession(session)
+    }
+}
+```
+
+Update your `AndroidManifest.xml` to include the RTSP server:
+
+```xml
+<service android:name=".RTSPServer" android:exported="false" />
+```
+
+### Putting It All Together
+
+In your `MainActivity`, start the camera and RTSP server:
+
+```kotlin
 class MainActivity : ComponentActivity() {
+    private lateinit var cameraCapture: CameraCapture
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            ForZTEZ959Theme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = Build.MANUFACTURER,  // Get the manufacturer name dynamically
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+        setContentView(R.layout.activity_main)
+
+        val textureView = findViewById<TextureView>(R.id.textureView)
+        cameraCapture = CameraCapture(this, textureView)
+
+        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+                cameraCapture.startCamera()
             }
+
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                cameraCapture.stopCamera()
+                return true
+            }
+
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
         }
+
+        startService(Intent(this, RTSPServer::class.java))
     }
 }
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ForZTEZ959Theme {
-        Greeting("Android")
-    }
-}
-
 ```
+
+This is a basic setup to get you started. You may need to handle additional details like permissions at runtime, error handling, and optimizing the video stream for your specific use case. Let me know if you need further assistance!
+
+Source: Conversation with Copilot, 8/4/2024
+(1) github.com. https://github.com/accurascan/Qatar-Android-SDK/tree/026e772b8e8ca5322861ed98112cb784780c0dda/README.md.
