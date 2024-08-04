@@ -1,12 +1,17 @@
 package com.github.kusl.z959
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.*
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
 import android.view.TextureView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class CameraCapture(private val context: Context, private val textureView: TextureView) {
     private lateinit var cameraDevice: CameraDevice
@@ -23,6 +28,10 @@ class CameraCapture(private val context: Context, private val textureView: Textu
 
     fun startCamera() {
         val cameraId = cameraManager.cameraIdList[0]
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(context as Activity, arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+            return
+        }
         cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
             override fun onOpened(camera: CameraDevice) {
                 cameraDevice = camera
@@ -41,7 +50,7 @@ class CameraCapture(private val context: Context, private val textureView: Textu
 
     private fun createCameraPreviewSession() {
         val texture = textureView.surfaceTexture
-        texture.setDefaultBufferSize(textureView.width, textureView.height)
+        texture?.setDefaultBufferSize(textureView.width, textureView.height)
         val surface = Surface(texture)
         captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
         captureRequestBuilder.addTarget(surface)
@@ -63,5 +72,9 @@ class CameraCapture(private val context: Context, private val textureView: Textu
         captureSession.close()
         cameraDevice.close()
         backgroundThread.quitSafely()
+    }
+
+    companion object {
+        private const val REQUEST_CAMERA_PERMISSION = 1
     }
 }
