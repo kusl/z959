@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             CameraPreview()
         }
+        cameraCapture = CameraCapture(this, TextureView(this))
     }
 
     @Composable
